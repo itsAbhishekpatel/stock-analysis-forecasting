@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Analysis & Forecasting System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">📈 Stock Analyzer</div>
+            <ul class="nav-menu">
+                <li><a href="#home" class="active">Home</a></li>
+                <li><a href="#watchlist">Watchlist</a></li>
+                <li><a href="#portfolio">Portfolio</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Search Section -->
+        <section class="search-section">
+            <h2>Search Stock</h2>
+            <div class="search-box">
+                <input 
+                    type="text" 
+                    id="stockInput" 
+                    placeholder="Enter stock ticker (e.g., AAPL, GOOGL, MSFT)" 
+                    class="search-input"
+                >
+                <button id="searchBtn" class="btn btn-primary">Search</button>
+            </div>
+            <div id="error-message" class="error-message"></div>
+        </section>
+
+        <!-- Stock Summary Card -->
+        <section id="stock-summary" class="stock-summary hidden">
+            <h2>Stock Summary</h2>
+            <div class="summary-card">
+                <div class="summary-row">
+                    <div class="summary-item">
+                        <span class="label">Symbol</span>
+                        <span id="stock-symbol" class="value">--</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Current Price</span>
+                        <span id="stock-price" class="value">$--</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Change (%)</span>
+                        <span id="stock-change" class="value">--</span>
+                    </div>
+                </div>
+                <div class="summary-row">
+                    <div class="summary-item">
+                        <span class="label">Volume</span>
+                        <span id="stock-volume" class="value">--</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">High</span>
+                        <span id="stock-high" class="value">$--</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Low</span>
+                        <span id="stock-low" class="value">$--</span>
+                    </div>
+                </div>
+                <div class="summary-row">
+                    <div class="summary-item full-width">
+                        <span class="label">Last Update</span>
+                        <span id="stock-update" class="value">--</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Price Chart Section -->
+        <section id="chart-section" class="chart-section hidden">
+            <h2>Price Chart</h2>
+            <div class="chart-container">
+                <canvas id="priceChart"></canvas>
+            </div>
+        </section>
+
+        <!-- Forecast Section -->
+        <section id="forecast-section" class="forecast-section hidden">
+            <h2>📊 Price Forecast</h2>
+            <div class="forecast-grid">
+                <div class="forecast-card">
+                    <div class="forecast-label">1 Week</div>
+                    <div id="forecast-1w" class="forecast-price">$--</div>
+                    <div id="confidence-1w" class="forecast-confidence">Confidence: --</div>
+                </div>
+                <div class="forecast-card">
+                    <div class="forecast-label">2 Weeks</div>
+                    <div id="forecast-2w" class="forecast-price">$--</div>
+                    <div id="confidence-2w" class="forecast-confidence">Confidence: --</div>
+                </div>
+                <div class="forecast-card">
+                    <div class="forecast-label">3 Weeks</div>
+                    <div id="forecast-3w" class="forecast-price">$--</div>
+                    <div id="confidence-3w" class="forecast-confidence">Confidence: --</div>
+                </div>
+                <div class="forecast-card">
+                    <div class="forecast-label">1 Month</div>
+                    <div id="forecast-1m" class="forecast-price">$--</div>
+                    <div id="confidence-1m" class="forecast-confidence">Confidence: --</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Analysis Section -->
+        <section id="analysis-section" class="analysis-section hidden">
+            <h2>📈 Analysis</h2>
+            <div class="analysis-box">
+                <p id="analysis-text">Loading analysis...</p>
+            </div>
+        </section>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>&copy; 2026 Stock Analysis & Forecasting System. All rights reserved.</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+</body>
+</html>
