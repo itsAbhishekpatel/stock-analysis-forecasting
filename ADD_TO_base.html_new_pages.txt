@@ -1,0 +1,24 @@
+================================================================
+ NAV ADDITIONS TO base.html — 3 new links
+================================================================
+
+In the navbar, find this block:
+
+    <li class="nav-item">
+        <a class="nav-link" href="/search">Search Stocks</a>
+    </li>
+
+Add these three lines right after it (or in whatever order you prefer):
+
+    <li class="nav-item">
+        <a class="nav-link" href="/watchlist">Watchlist</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="/movers">Top Movers</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="/compare">Compare</a>
+    </li>
+
+That's the only change needed to base.html for these three pages.
+================================================================

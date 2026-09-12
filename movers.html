@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Top Gainers & Losers - Indian Stock Analyzer{% endblock %}
+
+{% block extra_css %}
+<style>
+    .mover-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.6rem 0.75rem;
+        border-radius: 0.4rem;
+    }
+    .mover-row:hover { background-color: rgba(0,0,0,0.03); }
+    .mover-symbol { font-weight: 600; }
+    .gainer-value { color: #198754; font-weight: 600; }
+    .loser-value { color: #dc3545; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div>
+        <h2 class="mb-1">📊 Top Gainers & Losers</h2>
+        <span id="moversMeta" class="text-muted small">Loading...</span>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <div class="spinner-border spinner-border-sm text-primary" id="moversSpinner" style="display:none;"></div>
+        <button class="btn btn-outline-primary btn-sm" id="refreshMoversBtn">🔄 Refresh</button>
+    </div>
+</div>
+
+<div id="moversAlert" class="alert alert-warning d-none"></div>
+
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-success text-white">
+                <strong>📈 Top Gainers</strong>
+            </div>
+            <div class="card-body" id="gainersList">
+                <p class="text-muted small">Loading...</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-danger text-white">
+                <strong>📉 Top Losers</strong>
+            </div>
+            <div class="card-body" id="losersList">
+                <p class="text-muted small">Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/movers.js') }}"></script>
+{% endblock %}

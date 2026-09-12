@@ -1,0 +1,131 @@
+================================================================
+ ADDITIONS TO app.py for: Watchlist, Top Movers, Compare
+================================================================
+
+Watchlist and Compare need NO backend changes — they run entirely on the
+frontend using your existing /api/stock/<symbol> and /api/search endpoints.
+Top Gainers/Losers needs one new backend endpoint since it has to scan
+multiple symbols. Everything below is additive only.
+
+
+1) ADD THESE IMPORTS near the top of app.py (with your other imports):
+----------------------------------------------------------------
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+2) ADD THIS near your other module-level globals (e.g. near
+   "news_fetcher = NewsFetcher()" if you added that, or just after your
+   existing service initializations):
+----------------------------------------------------------------
+# Simple in-memory cache for top movers (avoids re-scanning on every request)
+_movers_cache = {'time': None, 'data': None}
+MOVERS_CACHE_TTL_SECONDS = 300  # 5 minutes
+
+
+3) ADD THIS HELPER FUNCTION anywhere in the "UTILITY FUNCTIONS" section:
+----------------------------------------------------------------
+def _get_symbol_change(symbol):
+    """Fetch minimal data needed to compute a symbol's day change %."""
+    try:
+        hist = data_fetcher.fetch_historical_data(symbol)
+        if hist is None or hist.empty or len(hist) < 2:
+            return None
+
+        last_close = float(hist['Close'].iloc[-1])
+        prev_close = float(hist['Close'].iloc[-2])
+        if prev_close == 0:
+            return None
+
+        change_percent = ((last_close - prev_close) / prev_close) * 100
+        return {
+            'symbol': symbol,
+            'price': round(last_close, 2),
+            'change': round(last_close - prev_close, 2),
+            'change_percent': round(change_percent, 2)
+        }
+    except Exception as e:
+        logger.warning(f"Top movers: failed to fetch {symbol}: {e}")
+        return None
+
+
+4) ADD THESE THREE PAGE ROUTES anywhere in the "ROUTES" section:
+----------------------------------------------------------------
+@app.route('/watchlist')
+def watchlist():
+    """Watchlist page route"""
+    return render_template('watchlist.html')
+
+
+@app.route('/movers')
+def movers():
+    """Top gainers/losers page route"""
+    return render_template('movers.html')
+
+
+@app.route('/compare')
+def compare():
+    """Stock comparison page route"""
+    return render_template('compare.html')
+
+
+5) ADD THIS API ROUTE for Top Gainers/Losers (needs the imports/helper/cache
+   from steps 1-3 above):
+----------------------------------------------------------------
+@app.route('/api/top-movers')
+def get_top_movers():
+    """Scan a batch of stocks and return top gainers/losers"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        scan_limit = request.args.get('scan', 25, type=int)
+        force_refresh = request.args.get('refresh', '0') == '1'
+
+        now = datetime.now()
+        cache_fresh = (
+            _movers_cache['data'] is not None and
+            _movers_cache['time'] is not None and
+            (now - _movers_cache['time']).total_seconds() < MOVERS_CACHE_TTL_SECONDS
+        )
+
+        if not force_refresh and cache_fresh:
+            results = _movers_cache['data']
+        else:
+            available_stocks = data_fetcher.get_available_stocks()
+            symbols_to_scan = available_stocks[:scan_limit]
+
+            results = []
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                futures = {
+                    executor.submit(_get_symbol_change, s): s
+                    for s in symbols_to_scan
+                }
+                for future in as_completed(futures):
+                    result = future.result()
+                    if result:
+                        results.append(result)
+
+            _movers_cache['data'] = results
+            _movers_cache['time'] = now
+
+        sorted_by_change = sorted(results, key=lambda x: x['change_percent'], reverse=True)
+        gainers = sorted_by_change[:limit]
+        losers = sorted_by_change[-limit:][::-1] if len(sorted_by_change) >= limit else sorted_by_change
+
+        return jsonify({
+            'status': 'success',
+            'gainers': gainers,
+            'losers': losers,
+            'scanned': len(results),
+            'timestamp': now.isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"Error fetching top movers: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Error fetching top movers: {str(e)}'}), 500
+
+----------------------------------------------------------------
+NOTE on performance: /api/top-movers scans `scan` symbols (default 25) by
+calling data_fetcher.fetch_historical_data() for each one, in parallel
+(8 at a time). If your data_fetcher is slow (e.g. hits a live API per call),
+you can lower "scan_limit" default or raise MOVERS_CACHE_TTL_SECONDS so it
+scans less often. Results are cached for 5 minutes by default either way.
+================================================================
