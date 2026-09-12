@@ -35,14 +35,25 @@
     async function loadMovers(forceRefresh = false) {
         spinner.style.display = 'inline-block';
         alertBox.classList.add('d-none');
+        metaText.textContent = 'Loading...';
+
+        // Give up after 25s client-side so the page never spins forever,
+        // even if something upstream is still slow/misbehaving.
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
 
         try {
             const url = `/api/top-movers${forceRefresh ? '?refresh=1' : ''}`;
-            const res = await fetch(url);
+            const res = await fetch(url, { signal: controller.signal });
             const data = await res.json();
 
             if (data.status !== 'success') {
                 throw new Error(data.error || 'Failed to load movers');
+            }
+
+            if (data.warning) {
+                alertBox.textContent = data.warning;
+                alertBox.classList.remove('d-none');
             }
 
             renderList(gainersList, data.gainers, true);
@@ -51,9 +62,15 @@
 
         } catch (err) {
             console.error('Error loading top movers:', err);
-            alertBox.textContent = 'Could not load top movers right now. Please try refreshing.';
+            const message = err.name === 'AbortError'
+                ? 'This is taking too long (25s+). The server may be slow to fetch stock data right now - try again in a moment.'
+                : 'Could not load top movers right now. Please try refreshing.';
+            alertBox.textContent = message;
             alertBox.classList.remove('d-none');
+            gainersList.innerHTML = '<p class="text-muted small mb-0">Unavailable.</p>';
+            losersList.innerHTML = '<p class="text-muted small mb-0">Unavailable.</p>';
         } finally {
+            clearTimeout(timeoutId);
             spinner.style.display = 'none';
         }
     }

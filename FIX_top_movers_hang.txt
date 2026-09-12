@@ -1,0 +1,130 @@
+================================================================
+ FIX: /api/top-movers hanging forever
+================================================================
+
+THE BUG:
+The original route did:
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(_get_symbol_change, s): s for s in symbols_to_scan}
+        for future in as_completed(futures):
+            ...
+
+The "with" block calls executor.shutdown(wait=True) when it exits, which
+blocks until EVERY submitted task finishes. If even one of the 25 symbol
+fetches hangs (slow/unresponsive network call inside fetch_historical_data,
+no timeout set), the whole endpoint waits forever — which is exactly what
+you're seeing as "stuck loading."
+
+
+THE FIX:
+Replace your existing /api/top-movers route in app.py with this version.
+It caps the total wait at 15 seconds no matter what, and doesn't block on
+stragglers.
+
+----------------------------------------------------------------
+1) UPDATE THIS IMPORT (add `wait` to the existing import line):
+----------------------------------------------------------------
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
+
+
+----------------------------------------------------------------
+2) REPLACE your /api/top-movers route with this:
+----------------------------------------------------------------
+@app.route('/api/top-movers')
+def get_top_movers():
+    """Scan a batch of stocks and return top gainers/losers"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        scan_limit = request.args.get('scan', 15, type=int)   # lowered default from 25 -> 15
+        force_refresh = request.args.get('refresh', '0') == '1'
+        scan_timeout_seconds = 15  # hard cap on how long we wait, total
+
+        now = datetime.now()
+        cache_fresh = (
+            _movers_cache['data'] is not None and
+            _movers_cache['time'] is not None and
+            (now - _movers_cache['time']).total_seconds() < MOVERS_CACHE_TTL_SECONDS
+        )
+
+        if not force_refresh and cache_fresh:
+            results = _movers_cache['data']
+        else:
+            available_stocks = data_fetcher.get_available_stocks()
+            symbols_to_scan = available_stocks[:scan_limit]
+
+            executor = ThreadPoolExecutor(max_workers=8)
+            futures = {
+                executor.submit(_get_symbol_change, s): s
+                for s in symbols_to_scan
+            }
+
+            # Wait up to scan_timeout_seconds TOTAL (not per-symbol). Whatever
+            # hasn't finished by then is abandoned instead of blocking us.
+            done, not_done = wait(futures, timeout=scan_timeout_seconds)
+
+            results = []
+            for future in done:
+                try:
+                    result = future.result()
+                    if result:
+                        results.append(result)
+                except Exception as e:
+                    logger.warning(f"Top movers: a symbol fetch raised: {e}")
+
+            if not_done:
+                logger.warning(
+                    f"Top movers: {len(not_done)} of {len(symbols_to_scan)} "
+                    f"symbol fetches did not finish within {scan_timeout_seconds}s "
+                    f"and were abandoned: {[futures[f] for f in not_done]}"
+                )
+
+            # Don't block waiting for the abandoned threads - let them die
+            # off in the background whenever the underlying call returns.
+            executor.shutdown(wait=False)
+
+            _movers_cache['data'] = results
+            _movers_cache['time'] = now
+
+        if not results:
+            return jsonify({
+                'status': 'success',
+                'gainers': [],
+                'losers': [],
+                'scanned': 0,
+                'warning': 'No symbols returned data in time. Try again or lower the scan count.',
+                'timestamp': now.isoformat()
+            })
+
+        sorted_by_change = sorted(results, key=lambda x: x['change_percent'], reverse=True)
+        gainers = sorted_by_change[:limit]
+        losers = sorted_by_change[-limit:][::-1] if len(sorted_by_change) >= limit else sorted_by_change
+
+        return jsonify({
+            'status': 'success',
+            'gainers': gainers,
+            'losers': losers,
+            'scanned': len(results),
+            'timestamp': now.isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"Error fetching top movers: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Error fetching top movers: {str(e)}'}), 500
+
+----------------------------------------------------------------
+WHY THIS FIXES IT:
+- `wait(futures, timeout=15)` returns after at most 15 seconds no matter
+  how many symbols are still stuck — it does NOT wait for every future
+  like the old `with ... as executor:` block did.
+- `executor.shutdown(wait=False)` doesn't block on exit; any stuck threads
+  just finish (or don't) in the background without holding up your response.
+- If a symbol repeatedly times out, you'll now see it named in your Flask
+  logs ("... were abandoned: ['XYZ']") so you know which symbol/data source
+  is slow, instead of the request just hanging silently.
+
+If you still get zero results back within 15 seconds for ALL symbols, that
+usually means `data_fetcher.fetch_historical_data()` itself is slow/rate
+limited for every call, not just one — in that case lower `scan_limit`
+further (try 5-8) or check what's slow inside that fetcher.
+================================================================
