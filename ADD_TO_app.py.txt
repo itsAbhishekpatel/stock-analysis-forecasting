@@ -1,0 +1,54 @@
+================================================================
+ ADDITIONS TO app.py — copy/paste, nothing existing is modified
+================================================================
+
+1) ADD THIS IMPORT near your other "from services..." imports at the top:
+----------------------------------------------------------------
+from services.news_fetcher import NewsFetcher
+
+
+2) ADD THIS near your other service initializations
+   (right after "market_sentiment_analyzer = MarketSentimentAnalyzer()"):
+----------------------------------------------------------------
+news_fetcher = NewsFetcher()
+
+
+3) ADD THESE TWO ROUTES anywhere in the "ROUTES" section
+   (e.g. right after your existing @app.route('/search') function):
+----------------------------------------------------------------
+@app.route('/market-news')
+def market_news():
+    """Market news page route"""
+    return render_template('market_news.html')
+
+
+@app.route('/api/market-news')
+def get_market_news():
+    """Fetch live market news (JSON, used by market_news.html via JS)"""
+    try:
+        force_refresh = request.args.get('refresh', '0') == '1'
+        limit = request.args.get('limit', 30, type=int)
+
+        news_items = news_fetcher.fetch_all_news(limit=limit, force_refresh=force_refresh)
+
+        # Make datetimes JSON-safe
+        serializable_news = []
+        for item in news_items:
+            item_copy = dict(item)
+            item_copy.pop('published_parsed', None)
+            serializable_news.append(item_copy)
+
+        return jsonify({
+            'status': 'success',
+            'count': len(serializable_news),
+            'news': serializable_news,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"Error fetching market news: {str(e)}", exc_info=True)
+        return jsonify({'error': f'Error fetching market news: {str(e)}'}), 500
+
+----------------------------------------------------------------
+That's it — no existing function, route, or import line is changed.
+================================================================

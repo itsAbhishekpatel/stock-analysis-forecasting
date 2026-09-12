@@ -1,0 +1,18 @@
+================================================================
+ ONE ADDITION TO base.html — a single nav link
+================================================================
+
+In the navbar, find this block:
+
+    <li class="nav-item">
+        <a class="nav-link" href="/search">Search Stocks</a>
+    </li>
+
+Add this line right after it:
+
+    <li class="nav-item">
+        <a class="nav-link" href="/market-news">Market News</a>
+    </li>
+
+That's the only change needed to base.html.
+================================================================
