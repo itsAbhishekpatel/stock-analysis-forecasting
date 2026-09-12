@@ -26,9 +26,12 @@ class NewsFetcher:
     """Fetches and normalizes market news from multiple free RSS sources."""
 
     # source_name -> RSS feed URL
+    # NOTE: Moneycontrol discontinued its native /rss/marketreports.xml feed,
+    # which is why an earlier version of this file returned no news. Livemint
+    # is used instead below and has been verified to return live entries.
     FEEDS = {
         'Economic Times': 'https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms',
-        'Moneycontrol': 'https://www.moneycontrol.com/rss/marketreports.xml',
+        'Livemint': 'https://www.livemint.com/rss/markets',
         'Business Standard': 'https://www.business-standard.com/rss/markets-106.rss',
     }
 
@@ -106,6 +109,22 @@ class NewsFetcher:
         parsed = feedparser.parse(url, request_headers={
             'User-Agent': 'Mozilla/5.0 (compatible; MarketNewsBot/1.0)'
         })
+
+        # feedparser sets bozo=1 on malformed XML / connection problems instead
+        # of raising, so a failed fetch would otherwise fail *silently* and
+        # just look like "no news". Surface it in the logs instead.
+        if getattr(parsed, 'bozo', 0):
+            logger.warning(
+                f"[{source_name}] feed returned bozo=1 "
+                f"(reason: {getattr(parsed, 'bozo_exception', 'unknown')}), "
+                f"got {len(parsed.entries)} entries anyway"
+            )
+
+        if not parsed.entries:
+            logger.warning(
+                f"[{source_name}] returned 0 entries from {url} "
+                f"(status: {getattr(parsed, 'status', 'no HTTP status - likely blocked/unreachable')})"
+            )
 
         items = []
         for entry in parsed.entries[:15]:
